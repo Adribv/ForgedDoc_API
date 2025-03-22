@@ -1,4 +1,6 @@
-# Set up Tesseract paths and verify installation
+FROM python:3.9-slim
+
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     libpoppler-dev \
@@ -7,10 +9,12 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify installations
-RUN pdftoppm -v && \
-    tesseract --version && \
-    tesseract --list-langs
+# Set up Tesseract paths and verify installation
+RUN TESSDATA_DIR=$(find /usr/share/tesseract-ocr -name "tessdata" -type d | head -n 1) && \
+    echo "Found Tesseract data directory: $TESSDATA_DIR" && \
+    ln -s $TESSDATA_DIR /usr/share/tessdata && \
+    tesseract --list-langs && \
+    pdftoppm -v
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -46,6 +50,8 @@ RUN mkdir -p /tmp/pdf_processing && \
 RUN python -c "\
 import sys; \
 import pytesseract; \
+from pdf2image import convert_from_path; \
+from PIL import Image; \
 print('Python version:', sys.version); \
 print('Tesseract version:', pytesseract.get_tesseract_version()); \
 print('Tesseract data prefix:', pytesseract.get_tesseract_prefix()); \
@@ -73,4 +79,4 @@ exec gunicorn \
     chmod +x /app/start.sh
 
 # Set the command to run the application
-CMD ["/app/start.sh"]
+CMD ["/app/start.sh"] 
