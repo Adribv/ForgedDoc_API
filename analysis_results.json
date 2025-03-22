@@ -1,0 +1,44 @@
+{
+  "is_forged": false,
+  "confidence": 0.0,
+  "analysis_details": {
+    "file_type": "pdf",
+    "pages": [
+      {
+        "is_forged": true,
+        "confidence": 1.0,
+        "analysis_details": {
+          "critical_issues": [
+            "Detected sharp edge transitions indicative of cut-paste",
+            "Inconsistent noise patterns detected"
+          ],
+          "visual_inconsistencies": [
+            "Inconsistent compression artifacts detected"
+          ],
+          "text_anomalies": [],
+          "image_format": "png",
+          "page_number": 1,
+          "text_analysis": {
+            "font_inconsistencies": false,
+            "spacing_irregularities": false,
+            "character_confidence": 0.0,
+            "error": "(1, 'Error opening data file C:\\\\Program Files (x86)\\\\Tesseract-OCR\\\\eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your \"tessdata\" directory. Failed loading language \\'eng\\' Tesseract couldn\\'t load any languages! Could not initialize tesseract.')"
+          }
+        }
+      }
+    ],
+    "metadata": {
+      "author": "",
+      "creator": "Adobe Scan for Android 24.05.20-google-dynamic",
+      "producer": "Adobe Scan for Android 24.05.20-google-dynamic",
+      "creation_date": "",
+      "modification_date": "",
+      "suspicious_software_detected": false,
+      "is_encrypted": false,
+      "has_acroform": false,
+      "has_xfa": false,
+      "critical_issues": []
+    },
+    "inconsistencies": []
+  }
+}
