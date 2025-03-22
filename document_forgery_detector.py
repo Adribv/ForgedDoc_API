@@ -21,21 +21,33 @@ class DocumentForgeryDetector:
         logger.info("Initializing Document Forgery Detector")
         self.temp_dir = tempfile.mkdtemp()
         
-        # Set exact poppler path from installation
-        self.poppler_path = os.path.join(
-            os.environ.get('LOCALAPPDATA', ''),
-            'Programs',
-            'poppler',
-            'poppler-24.02.0',
-            'Library',
-            'bin'
-        )
+        # Set poppler path - check multiple locations
+        poppler_paths = [
+            '/usr/bin',  # Linux default
+            '/usr/local/bin',  # Alternative Linux location
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'poppler', 'Library', 'bin'),  # Windows local
+            os.path.join(os.environ.get('PROGRAMFILES', ''), 'poppler', 'bin'),  # Windows program files
+            os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'poppler', 'bin'),  # Windows program files (x86)
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'poppler-24.02.0', 'Library', 'bin'),  # Specific version
+        ]
         
-        if os.path.exists(os.path.join(self.poppler_path, 'pdftoppm.exe')):
-            logger.info(f"Found poppler at: {self.poppler_path}")
-        else:
-            logger.warning(f"Poppler not found at expected location: {self.poppler_path}")
-            logger.warning("Please run setup_poppler.py to install poppler")
+        self.poppler_path = None
+        for path in poppler_paths:
+            if os.path.exists(path) and os.path.exists(os.path.join(path, 'pdftoppm.exe' if os.name == 'nt' else 'pdftoppm')):
+                self.poppler_path = path
+                logger.info(f"Found poppler at: {path}")
+                break
+        
+        if not self.poppler_path:
+            # If no specific path is found, try using system PATH
+            try:
+                import subprocess
+                subprocess.run(['pdftoppm', '-v'], capture_output=True)
+                self.poppler_path = None  # Let pdf2image find it in system PATH
+                logger.info("Using system poppler installation")
+            except Exception as e:
+                logger.warning("Poppler not found in system. PDF analysis may fail.")
+                logger.warning("Please ensure poppler-utils is installed")
             
         # Set Tesseract path
         tesseract_paths = [
