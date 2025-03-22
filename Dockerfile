@@ -37,13 +37,18 @@ RUN mkdir -p /tmp/pdf_processing && \
 # Test installations
 RUN python -c "from pdf2image import convert_from_path; from PIL import Image; import pytesseract; print('Dependencies verified')"
 
+# Create a shell script to run the application
+RUN echo '#!/bin/bash\n\
+gunicorn --bind "0.0.0.0:$PORT" \
+    --timeout 120 \
+    --workers 2 \
+    --threads 4 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --log-level info \
+    --preload \
+    app:app' > /app/start.sh && \
+    chmod +x /app/start.sh
+
 # Set the command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", \
-     "--timeout", "120", \
-     "--workers", "2", \
-     "--threads", "4", \
-     "--max-requests", "1000", \
-     "--max-requests-jitter", "50", \
-     "--log-level", "info", \
-     "--preload", \
-     "app:app"] 
+CMD ["/app/start.sh"] 
