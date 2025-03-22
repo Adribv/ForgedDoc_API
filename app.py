@@ -7,6 +7,7 @@ import gc
 import logging
 import signal
 import sys
+import resource
 
 # Configure logging
 logging.basicConfig(
@@ -15,8 +16,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Set resource limits
+def set_memory_limits():
+    # Set soft limit to 512MB
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, hard))
+    logger.info(f"Memory limits set: soft={soft/(1024*1024)}MB, hard={hard/(1024*1024)}MB")
+
+try:
+    set_memory_limits()
+except Exception as e:
+    logger.warning(f"Could not set memory limits: {e}")
+
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB max file size
 app.config['UPLOAD_FOLDER'] = os.path.join(tempfile.gettempdir(), 'pdf_processing')
 
 # Ensure upload folder exists
@@ -121,6 +134,7 @@ def analyze_document():
             try:
                 if os.path.exists(filepath):
                     os.remove(filepath)
+                gc.collect()  # Force garbage collection after cleanup
             except Exception as e:
                 logger.error(f"Error cleaning up file {filepath}: {e}")
 
@@ -135,7 +149,7 @@ def analyze_document():
 def request_entity_too_large(error):
     return jsonify({
         "error": "File too large",
-        "message": "The file size exceeds the maximum allowed size (8MB)"
+        "message": "The file size exceeds the maximum allowed size (5MB)"
     }), 413
 
 if __name__ == '__main__':
