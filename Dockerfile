@@ -1,47 +1,49 @@
 FROM python:3.9-slim
 
-# Install system dependencies and poppler-utils
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
     poppler-utils \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
     libpoppler-dev \
     libpoppler-cpp-dev \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify poppler installation
+# Verify installations
 RUN pdftoppm -v && \
-    pdfinfo -v
+    tesseract --version
 
-# Set working directory
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV MALLOC_ARENA_MAX=2
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
+ENV MPLCONFIGDIR=/tmp/matplotlib
+ENV TMPDIR=/tmp
+
+# Create and set working directory
 WORKDIR /app
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
+# Copy application code
 COPY . .
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PORT=8000
-ENV PATH="/usr/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+# Create temporary directory
+RUN mkdir -p /tmp/pdf_processing && \
+    chmod 777 /tmp/pdf_processing
 
-# Create directory for temporary files
-RUN mkdir -p /tmp/pdf2image
-ENV PDF2IMAGE_TEMP_DIR=/tmp/pdf2image
+# Test installations
+RUN python -c "from pdf2image import convert_from_path; from PIL import Image; import pytesseract; print('Dependencies verified')"
 
-# Test poppler installation
-RUN python -c "from pdf2image import convert_from_path; print('Poppler installation verified')"
-
-# Expose port
-EXPOSE 8000
-
-# Run the application
-CMD gunicorn --bind 0.0.0.0:$PORT app:app 
+# Set the command to run the application
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", \
+     "--timeout", "120", \
+     "--workers", "2", \
+     "--threads", "4", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "50", \
+     "--log-level", "info", \
+     "--preload", \
+     "app:app"] 
