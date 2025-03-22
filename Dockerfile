@@ -9,9 +9,10 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify installations
+# Verify installations and tessdata
 RUN pdftoppm -v && \
-    tesseract --version
+    tesseract --version && \
+    ls -l /usr/share/tesseract-ocr/4.00/tessdata/eng.traineddata
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -19,6 +20,10 @@ ENV MALLOC_ARENA_MAX=2
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
 ENV MPLCONFIGDIR=/tmp/matplotlib
 ENV TMPDIR=/tmp
+# Limit Python memory usage
+ENV PYTHONMALLOC=malloc
+ENV PYTHONUTF8=1
+ENV PYTHONHASHSEED=random
 
 # Create and set working directory
 WORKDIR /app
@@ -30,23 +35,32 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create temporary directory
+# Create temporary directory with proper permissions
 RUN mkdir -p /tmp/pdf_processing && \
-    chmod 777 /tmp/pdf_processing
+    chmod 777 /tmp/pdf_processing && \
+    mkdir -p /tmp/tesseract_cache && \
+    chmod 777 /tmp/tesseract_cache
 
-# Test installations
-RUN python -c "from pdf2image import convert_from_path; from PIL import Image; import pytesseract; print('Dependencies verified')"
+# Verify Tesseract and dependencies
+RUN python -c "\
+from pdf2image import convert_from_path; \
+from PIL import Image; \
+import pytesseract; \
+print('Testing Tesseract...'); \
+pytesseract.get_tesseract_version(); \
+print('Dependencies verified')"
 
 # Create a shell script to run the application
 RUN echo '#!/bin/bash\n\
-gunicorn --bind "0.0.0.0:$PORT" \
-    --timeout 120 \
-    --workers 2 \
-    --threads 4 \
-    --max-requests 1000 \
+export TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata\n\
+export TESSERACT_CACHE_DIR=/tmp/tesseract_cache\n\
+gunicorn --bind "0.0.0.0:${PORT:-8000}" \
+    --timeout 180 \
+    --workers 1 \
+    --threads 2 \
+    --max-requests 100 \
     --max-requests-jitter 50 \
     --log-level info \
-    --preload \
     app:app' > /app/start.sh && \
     chmod +x /app/start.sh
 

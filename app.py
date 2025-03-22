@@ -5,16 +5,47 @@ from document_forgery_detector import DocumentForgeryDetector
 import tempfile
 import gc
 import logging
+import signal
+import sys
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB max file size
-app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
+app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8MB max file size
+app.config['UPLOAD_FOLDER'] = os.path.join(tempfile.gettempdir(), 'pdf_processing')
+
+# Ensure upload folder exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'}
+
+def cleanup_temp_files():
+    """Clean up temporary files in the upload folder"""
+    try:
+        for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                logger.error(f"Error deleting {file_path}: {e}")
+    except Exception as e:
+        logger.error(f"Error cleaning temp directory: {e}")
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logger.info("Received shutdown signal, cleaning up...")
+    cleanup_temp_files()
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -31,6 +62,8 @@ def home():
 
 @app.route('/analyze', methods=['POST'])
 def analyze_document():
+    gc.collect()  # Force garbage collection before processing
+    
     try:
         # Check if a file was sent
         if 'document' not in request.files:
@@ -55,12 +88,14 @@ def analyze_document():
                 "message": f"Allowed file types are: {', '.join(ALLOWED_EXTENSIONS)}"
             }), 400
 
-        # Save the file temporarily
+        # Save the file temporarily with a unique name
         filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-
+        unique_filename = f"{os.getpid()}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        
         try:
+            file.save(filepath)
+            
             # Initialize detector and analyze document
             detector = DocumentForgeryDetector()
             results = detector.analyze_document(filepath)
@@ -83,8 +118,11 @@ def analyze_document():
 
         finally:
             # Clean up the temporary file
-            if os.path.exists(filepath):
-                os.remove(filepath)
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                logger.error(f"Error cleaning up file {filepath}: {e}")
 
     except Exception as e:
         logger.error(f"Server error: {str(e)}")
@@ -97,9 +135,9 @@ def analyze_document():
 def request_entity_too_large(error):
     return jsonify({
         "error": "File too large",
-        "message": "The file size exceeds the maximum allowed size (10MB)"
+        "message": "The file size exceeds the maximum allowed size (8MB)"
     }), 413
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port) 
